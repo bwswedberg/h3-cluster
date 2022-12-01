@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "target": "ES6",
+    "moduleResolution": "Node",
+    "module": "ESNext",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "incremental": true,
+    "composite": true,
+    "rootDir": ".",
+    "baseUrl": "."
+  },
+  "ts-node": {
+    "compilerOptions": {
+      "module": "CommonJS"
+    }
+  },
+  "include": ["src", "scripts"],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
