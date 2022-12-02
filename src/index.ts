@@ -1,6 +1,7 @@
 import h3 from 'h3-js';
 
 type Memo = Map<string, { total: number, zScore: number; label?: number }>;
+
 type Cluster = { 
   label: number; 
   total: number; 
@@ -17,8 +18,10 @@ interface FindClustersInput {
 const NOISE_LABEL = -1;
 
 export const findClusters = ({ data, resolution, minPoints, minZScore }: FindClustersInput) => {
+  // memo with - key as h3 cell hash, value as cell stats
   const memo: Memo = new Map();
 
+  // rollup the data into h3 cell memo
   for (const d of data) {
     const cell = h3.latLngToCell(d.lat, d.lng, resolution);
     let item = memo.get(cell);
@@ -67,7 +70,9 @@ export const findClusters = ({ data, resolution, minPoints, minZScore }: FindClu
 
       const item = memo.get(cell);
 
-      // item isn't in memo
+      // this is impossible to get to because we know it's in the memo
+      // and because of how we push neighbors onto the stack
+      // added here to keep typescript happy
       if (!item) continue;
     
       // item already visited
@@ -96,12 +101,17 @@ export const findClusters = ({ data, resolution, minPoints, minZScore }: FindClu
       // get the neighboring cells within 1 cell distance
       const neighboringCells = h3.gridDisk(cell, 1);
     
+      // visit neighbors to see if they are cluster members
       for (const neighboringCell of neighboringCells) {
+        // TODO: consider improving this condition to be less redundant 
+        // with above checks
 
-        // TODO: Consider adding optimization to prevent unnecessarily 
-        // adding cells to the stack
-
-        stack.push(neighboringCell);
+        // a preflight condition which reduces the amount of cells added 
+        // to the stack
+        const neighbor = memo.get(neighboringCell);
+        if (neighbor != null && neighbor.label == null) {
+          stack.push(neighboringCell);
+        }
       }
     }
 
