@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import * as h3Cluster from '../src';
+import * as h3Cluster from '../src/index';
 
 const args = process.argv.slice(2);
 const minPoints = +(args.find(d => d.startsWith('minPoints='))?.replace('minPoints=', '') ?? 1);

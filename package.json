@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "writeCsv": "ts-node scripts/writeCsv.ts limit=1000 output=./data/geolife-1k.csv",
-    "cluster": "ts-node scripts/runCluster.ts input=./data/geolife-100k.csv resolution=10 minZScore=1 output=./dist/clusters.json"
+    "cluster": "ts-node scripts/runCluster.ts input=./data/geolife-10k.csv resolution=10 minZScore=1 minPoints=1 output=./dist/clusters.json"
   },
   "author": "bwswedberg",
   "license": "MIT",

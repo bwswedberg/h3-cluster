@@ -1,6 +1,11 @@
 import h3 from 'h3-js';
 
 type Memo = Map<string, { total: number, zScore: number; label?: number }>;
+type Cluster = { 
+  label: number; 
+  total: number; 
+  geometry: Record<any, any>;
+};
 
 interface FindClustersInput {
   data: { lng: number, lat: number }[];
@@ -14,117 +19,109 @@ const NOISE_LABEL = -1;
 export const findClusters = ({ data, resolution, minPoints, minZScore }: FindClustersInput) => {
   const memo: Memo = new Map();
 
-  for (const d of data) {
-    const cell = h3.latLngToCell(d.lat, d.lng, resolution);
+  for (let i = 0; i < data.length; i++) {
+    const cell = h3.latLngToCell(data[i].lat, data[i].lng, resolution);
     let item = memo.get(cell);
     if (!item) {
+      // assign a temp value for total and zScore
       item = { total: 0, zScore: 0 };
     }
     item.total += 1;
     memo.set(cell, item);
   }
 
-  // caculate the mean and standard dev for cell totals
-  // TODO: migrate this code into the initial pass
-  const mean = Array.from(memo.values()).reduce((acc, cur) => acc + cur.total, 0) / memo.size;
-  const stdDev = Math.sqrt(
-    Array.from(memo.values()).reduce((acc, cur) => acc + Math.pow(cur.total - mean, 2), 0) / memo.size
-  );
+  // caculate the mean
+  const mean = data.length / memo.size;
 
-  // create options obj for visiting cells
-  const visitCellOptions = {
-    minPoints,
-    minZScore
-  };
+  // calculate variation
+  let variation = 0;
+  for (const item of memo.values()) {
+    variation += Math.pow(item.total - mean, 2)
+  }
 
-  // cluster labels
-  let label = 0;
+  // calculate standard deviation
+  const stdDev = Math.sqrt(variation / memo.size);
 
-  for (const [cell, item] of memo) {
-    const origLabel = item.label;
-
-    // assign true z-score for cluster criteria 
+  // calculate z-scores for each cell
+  for (const item of memo.values()) {
     item.zScore = (item.total - mean) / stdDev;
-
-    visitCell(memo, cell, label, visitCellOptions);
-
-    // if cell didn't have a label and now it has a cluster label 
-    // then we should begin a new cluster
-    if (origLabel == null && item.label != NOISE_LABEL) {
-      label += 1;
-    }
   }
 
-  const cellsByClusterLabel: Record<string, { label: number; total: number; cells: string[] }> = {};
+  const clusters: Cluster[] = [];
 
-  // rollup all cells by their label
-  for (const [cell, item] of memo) {
-    // skip the cell if it's a noise label
-    // added null check to for typescript although this would be impossible to reach
-    if (item.label === NOISE_LABEL || item.label == null) continue;
+  for (const rootCell of memo.keys()) {
+    // use an explicit stack to avoid stackoverflow error 
+    // potentially caused by recursion
+    const stack: string[] = [rootCell];
 
-    if (!cellsByClusterLabel[item.label]) {
-      // create a cluster if it doesn't exist
-      cellsByClusterLabel[item.label] = {
-        label: item.label,
-        total: 0,
-        cells: [],
+    const label = clusters.length;
+
+    const clusterCells: string[] = [];
+
+    while (stack.length) {
+      const cell = stack.pop();
+
+      // this is impossible to get to because the while loop condition
+      // added here to keep typescript happy
+      if (!cell) break;
+
+      const item = memo.get(cell);
+
+      // item isn't in memo
+      if (!item) continue;
+    
+      // item already visited
+      if (item.label != null) continue;
+    
+      // item z-score threshold is defined AND item does not meet threshold
+      if (minZScore != null && item.zScore < minZScore) {
+        // assign noise label to prevent revisit
+        item.label = NOISE_LABEL;
+        continue;
+      }
+    
+      // item min points threshold is defined AND item does not meet threshold
+      if (minPoints != null && item.total < minPoints) {
+        // assign noise label to prevent revisit
+        item.label = NOISE_LABEL;
+        continue;
+      }
+    
+      // mark label to prevent revisiting
+      item.label = label;
+
+      // add cell to cluster
+      clusterCells.push(cell);
+    
+      // get the neighboring cells within 1 cell distance
+      const neighboringCells = h3.gridDisk(cell, 1);
+    
+      for (const neighboringCell of neighboringCells) {
+
+        // TODO: Consider adding optimization to prevent unnecessarily 
+        // adding cells to the stack
+
+        stack.push(neighboringCell);
+      }
+    }
+
+    if (clusterCells.length) {
+      const total = clusterCells.reduce((acc, cur) => {
+        return acc + (memo.get(cur)?.total ?? 0);
+      }, 0);
+
+      const geometry = {
+        type: 'MultiPolygon',
+        coordinates: h3.cellsToMultiPolygon(clusterCells, true)
       };
-    }
 
-    // rollup cells values into cluster
-    cellsByClusterLabel[item.label].cells.push(cell);
-    cellsByClusterLabel[item.label].total += item.total;
-  }
-  
-  // return with the cells converted into geojson geometry
-  return Object.values(cellsByClusterLabel).map(cluster => {
-    const { cells, ...props } = cluster;
-    // convert cells into geojson geometry
-    const geometry = {
-      type: 'MultiPolygon',
-      coordinates: h3.cellsToMultiPolygon(cells, true)
+      clusters.push({
+        total,
+        label,
+        geometry
+      });
     }
-    return { ...props, geometry };
-  });
+  }
+
+  return clusters;
 };
-
-const visitCell = (
-  memo: Memo, 
-  cell: string, 
-  label: number, 
-  options: { minPoints?: number, minZScore?: number }
-) => {
-  const item = memo.get(cell);
-
-  // item isn't in memo
-  if (!item) return;
-
-  // item already visited
-  if (item.label != null) return;
-
-  // item z-score threshold is defined AND item does not meet threshold
-  if (options.minZScore != null && item.zScore < options.minZScore) {
-    // assign noise label to prevent revisit
-    item.label = NOISE_LABEL;
-    return;
-  }
-
-  // item min points threshold is defined AND item does not meet threshold
-  if (options.minPoints != null && item.total < options.minPoints) {
-    // assign noise label to prevent revisit
-    item.label = NOISE_LABEL;
-    return;
-  }
-
-  // assign item to cluster
-  item.label = label;
-
-  // get the neighboring cells within 1 cell distance
-  const neighboringCells = h3.gridDisk(cell, 1);
-
-  for (const neighboringCell of neighboringCells) {
-    // recurse
-    visitCell(memo, neighboringCell, label, options);
-  }
-}
