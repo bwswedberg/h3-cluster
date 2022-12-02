@@ -19,8 +19,8 @@ const NOISE_LABEL = -1;
 export const findClusters = ({ data, resolution, minPoints, minZScore }: FindClustersInput) => {
   const memo: Memo = new Map();
 
-  for (let i = 0; i < data.length; i++) {
-    const cell = h3.latLngToCell(data[i].lat, data[i].lng, resolution);
+  for (const d of data) {
+    const cell = h3.latLngToCell(d.lat, d.lng, resolution);
     let item = memo.get(cell);
     if (!item) {
       // assign a temp value for total and zScore
