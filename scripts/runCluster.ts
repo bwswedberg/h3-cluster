@@ -19,15 +19,15 @@ const data = fs.readFileSync(inputPath, 'utf-8')
   });
 
 const t0 = Date.now();
+
 const clusters = h3Cluster.findClusters({
   data,
   resolution,
   minPoints,
   minZScore
 });
-const t1 = Date.now();
 
-console.log(`${(t1 - t0) / 1000} seconds`)
+console.log(`${(Date.now() - t0) / 1000} seconds`)
 
 const fc = {
   type: 'FeatureCollection',
